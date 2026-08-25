@@ -332,8 +332,32 @@ function draw() {
   ctx.fillStyle = '#142028';
   ctx.fillRect(0, 0, CV_W, CV_H);
 
+  // 边界危险区：最外圈格子泛红，提示玩家别靠近
+  ctx.fillStyle = 'rgba(231, 76, 60, 0.10)';
+  ctx.fillRect(0, 0, CV_W, CELL);
+  ctx.fillRect(0, CV_H - CELL, CV_W, CELL);
+  ctx.fillRect(0, 0, CELL, CV_H);
+  ctx.fillRect(CV_W - CELL, 0, CELL, CV_H);
+  // 四角加深
+  const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, CELL * 1.2);
+  cg.addColorStop(0, 'rgba(231, 76, 60, 0.25)');
+  cg.addColorStop(1, 'rgba(231, 76, 60, 0)');
+  ctx.fillStyle = cg; ctx.fillRect(0, 0, CELL, CELL);
+  const cg2 = ctx.createRadialGradient(CV_W, 0, 0, CV_W, 0, CELL * 1.2);
+  cg2.addColorStop(0, 'rgba(231, 76, 60, 0.25)');
+  cg2.addColorStop(1, 'rgba(231, 76, 60, 0)');
+  ctx.fillStyle = cg2; ctx.fillRect(CV_W - CELL, 0, CELL, CELL);
+  const cg3 = ctx.createRadialGradient(0, CV_H, 0, 0, CV_H, CELL * 1.2);
+  cg3.addColorStop(0, 'rgba(231, 76, 60, 0.25)');
+  cg3.addColorStop(1, 'rgba(231, 76, 60, 0)');
+  ctx.fillStyle = cg3; ctx.fillRect(0, CV_H - CELL, CELL, CELL);
+  const cg4 = ctx.createRadialGradient(CV_W, CV_H, 0, CV_W, CV_H, CELL * 1.2);
+  cg4.addColorStop(0, 'rgba(231, 76, 60, 0.25)');
+  cg4.addColorStop(1, 'rgba(231, 76, 60, 0)');
+  ctx.fillStyle = cg4; ctx.fillRect(CV_W - CELL, CV_H - CELL, CELL, CELL);
+
   // 网格
-  ctx.strokeStyle = 'rgba(255,255,255,.04)';
+  ctx.strokeStyle = 'rgba(255,255,255,.07)';
   ctx.lineWidth = 1;
   for (let i = 1; i < COLS; i++) {
     ctx.beginPath(); ctx.moveTo(i*CELL, 0); ctx.lineTo(i*CELL, CV_H); ctx.stroke();
@@ -341,6 +365,29 @@ function draw() {
   for (let j = 1; j < ROWS; j++) {
     ctx.beginPath(); ctx.moveTo(0, j*CELL); ctx.lineTo(CV_W, j*CELL); ctx.stroke();
   }
+
+  // 清晰边界线（外圈红框 + 内侧暖光）
+  ctx.strokeStyle = 'rgba(231, 76, 60, 0.7)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(1.5, 1.5, CV_W - 3, CV_H - 3);
+  ctx.strokeStyle = 'rgba(255, 200, 100, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(5, 5, CV_W - 10, CV_H - 10);
+
+  // 四角 L 形装饰
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  const cm = 12, cp = 3;
+  // 左上
+  ctx.beginPath(); ctx.moveTo(cp, cp + cm); ctx.lineTo(cp, cp); ctx.lineTo(cp + cm, cp); ctx.stroke();
+  // 右上
+  ctx.beginPath(); ctx.moveTo(CV_W - cp - cm, cp); ctx.lineTo(CV_W - cp, cp); ctx.lineTo(CV_W - cp, cp + cm); ctx.stroke();
+  // 左下
+  ctx.beginPath(); ctx.moveTo(cp, CV_H - cp - cm); ctx.lineTo(cp, CV_H - cp); ctx.lineTo(cp + cm, CV_H - cp); ctx.stroke();
+  // 右下
+  ctx.beginPath(); ctx.moveTo(CV_W - cp - cm, CV_H - cp); ctx.lineTo(CV_W - cp, CV_H - cp); ctx.lineTo(CV_W - cp, CV_H - cp - cm); ctx.stroke();
+  ctx.lineCap = 'butt';
 
   // 食物
   if (food) drawFood(food.x, food.y);
