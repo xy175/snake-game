@@ -47,7 +47,7 @@ canvas{ display:block; width:100%; height:auto; border-radius:18px; background:#
   backdrop-filter:blur(8px); transition:background .15s; pointer-events:all;
 }
 #pauseBtn:hover{ background:rgba(0,0,0,.65); }
-#tools{ position:absolute; top:auto; bottom:12px; left:0; right:0; display:flex; justify-content:center; gap:6px; pointer-events:all; z-index:2; }
+#tools{ position:absolute; top:auto; bottom:12px; left:0; right:0; display:flex; justify-content:center; flex-wrap:wrap; gap:6px; pointer-events:all; z-index:2; padding:0 8px; }
 .toolBtn{ border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:6px 9px; color:#fff; background:rgba(20,30,35,.78); cursor:pointer; font-size:12px; backdrop-filter:blur(8px); }
 #dpad{ position:absolute; right:14px; bottom:64px; display:none; grid-template-columns:54px 54px 54px; grid-template-rows:54px 54px 54px; gap:6px; pointer-events:all; z-index:3; }
 #dpad button{ border:1.5px solid rgba(255,255,255,.22); background:rgba(20,30,35,.72); color:#fff; border-radius:12px; font-size:22px; cursor:pointer; backdrop-filter:blur(8px); box-shadow:0 2px 10px rgba(0,0,0,.4); transition:background .1s, transform .1s; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
@@ -105,7 +105,9 @@ canvas{ display:block; width:100%; height:auto; border-radius:18px; background:#
   <button class="toolBtn" id="soundBtn" onclick="toggleSound()">🔊 音效</button>
   <button class="toolBtn" id="musicBtn" onclick="toggleMusic()">🎵 音乐</button>
   <button class="toolBtn" id="dpadToggle" onclick="toggleDpad()">🕹 方向键</button>
-  <button class="toolBtn" onclick="clearBest()">清除最高分</button>
+  <button class="toolBtn" id="dpadSize" onclick="cycleDpadSize()">🔘 中</button>
+  <button class="toolBtn" id="autoBtn" onclick="toggleAuto()">🤖 自动</button>
+  <button class="toolBtn" onclick="clearBest()">🗑 最高</button>
 </div>
 <div id="pause" class="ov">
   <h1>⏸ 已暂停</h1>
@@ -296,6 +298,11 @@ function loop(ts) {
 }
 
 function step() {
+  // 自动模式：AI 决策方向
+  if (autopilot) {
+    const d = aiStep();
+    if (d) nextDir = d;
+  }
   if (nextDir.x !== -dir.x || nextDir.y !== -dir.y) dir = nextDir;
   const head = snake[snake.length - 1];
   const nx = head.x + dir.x, ny = head.y + dir.y;
@@ -527,10 +534,87 @@ function autoDpad() {
   // 触屏设备：默认开；纯电脑：不开
   if (dpadOn === false && isTouchDevice) { dpadOn = true; localStorage.setItem('snakeDpad', 'on'); }
   if (dpadOn === true && !isTouchDevice && localStorage.getItem('snakeDpad') === null) {
-    // 电脑端默认关
     dpadOn = false;
   }
   applyDpad();
+}
+
+// ── 方向键大小：小/中/大 ─────────────────────────
+const DPAD_SIZES = { s:{btn:42, font:16, gap:4, label:'🔘 小'}, m:{btn:54, font:22, gap:6, label:'🔘 中'}, l:{btn:68, font:28, gap:8, label:'🔘 大'} };
+let dpadSize = localStorage.getItem('snakeDpadSize') || 'm';
+function applyDpadSize() {
+  const sz = DPAD_SIZES[dpadSize] || DPAD_SIZES.m;
+  const dpad = document.getElementById('dpad');
+  dpad.style.gridTemplateColumns = `${sz.btn}px ${sz.btn}px ${sz.btn}px`;
+  dpad.style.gridTemplateRows = `${sz.btn}px ${sz.btn}px ${sz.btn}px`;
+  dpad.style.gap = sz.gap + 'px';
+  document.getElementById('dpadSize').textContent = sz.label;
+  document.querySelectorAll('#dpad button').forEach(b => b.style.fontSize = sz.font + 'px');
+}
+function cycleDpadSize() {
+  dpadSize = dpadSize === 's' ? 'm' : dpadSize === 'm' ? 'l' : 's';
+  localStorage.setItem('snakeDpadSize', dpadSize);
+  applyDpadSize();
+}
+applyDpadSize();
+
+// ── AI 自动模式 ──────────────────────────────────
+let autopilot = false;
+function toggleAuto() {
+  autopilot = !autopilot;
+  document.getElementById('autoBtn').textContent = autopilot ? '🤖 自动中' : '🤖 自动';
+  if (autopilot && alive) tone(880, .1, 'sine', .05);
+}
+
+function bfs(start, goal, blockedSet) {
+  if (start.x === goal.x && start.y === goal.y) return [start];
+  const key = (x, y) => x + ',' + y;
+  const visited = new Set([key(start.x, start.y)]);
+  const queue = [{ p: start, path: [start] }];
+  const moves = [[1,0],[-1,0],[0,1],[0,-1]];
+  while (queue.length) {
+    const { p, path } = queue.shift();
+    for (const [dx, dy] of moves) {
+      const nx = p.x + dx, ny = p.y + dy;
+      if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+      const k = key(nx, ny);
+      if (visited.has(k) || blockedSet.has(k)) continue;
+      if (nx === goal.x && ny === goal.y) return [...path, { x: nx, y: ny }];
+      visited.add(k);
+      queue.push({ p: { x: nx, y: ny }, path: [...path, { x: nx, y: ny }] });
+    }
+  }
+  return null;
+}
+
+function aiStep() {
+  if (!food || snake.length < 2) return null;
+  const head = snake[snake.length - 1];
+  // 1) 尝试走食物，但要保证吃完后还能追到尾巴
+  const obsToFood = new Set();
+  for (let i = 0; i < snake.length - 1; i++) obsToFood.add(snake[i].x + ',' + snake[i].y);
+  const foodPath = bfs(head, food, obsToFood);
+  if (foodPath && foodPath.length > 1) {
+    // 模拟吃完后：所有身体不动，新头=食物
+    const post = new Set();
+    for (const s of snake) post.add(s.x + ',' + s.y);
+    post.add(food.x + ',' + food.y);
+    const newTail = { x: snake[0].x, y: snake[0].y };
+    if (bfs(food, newTail, post)) {
+      const n = foodPath[1];
+      return { x: n.x - head.x, y: n.y - head.y };
+    }
+  }
+  // 2) 不安全则追尾巴（保证不立刻死）
+  const tail = snake[0];
+  const obsToTail = new Set();
+  for (let i = 1; i < snake.length - 1; i++) obsToTail.add(snake[i].x + ',' + snake[i].y);
+  const tailPath = bfs(head, tail, obsToTail);
+  if (tailPath && tailPath.length > 1) {
+    const n = tailPath[1];
+    return { x: n.x - head.x, y: n.y - head.y };
+  }
+  return null;
 }
 
 // 防止页面滚动
